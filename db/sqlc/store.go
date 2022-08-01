@@ -27,7 +27,7 @@ func (store *Store) exexTx(ctx context.Context, fn func(*Queries) error) error {
 	err = fn(q)
 	if err != nil {
 		if rbError := tx.Rollback(); rbError != nil {
-			fmt.Errorf("tx error: %v, rbError: %v", err, rbError)
+			return fmt.Errorf("tx err: %v, rb err: %v", err, rbError)
 		}
 		return err
 	}
@@ -48,9 +48,12 @@ type TransferTxResult struct {
 	FromEntry   Entry    `json:"from_entry"`
 }
 
+var txKey = struct{}{}
+
 func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
 	var result TransferTxResult
 
+	//txName := ctx.Value(txKey)
 	err := store.exexTx(ctx, func(q *Queries) error {
 
 		var err error
@@ -78,6 +81,22 @@ func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (Trans
 				AccountID: arg.ToAccountID,
 				Amount:    arg.Amount,
 			})
+		if err != nil {
+			return err
+		}
+
+		result.FromAccount, err = q.AddAccountBalance(ctx, AddAccountBalanceParams{
+			ID:     arg.FromAccountID,
+			Amount: -arg.Amount,
+		})
+		if err != nil {
+			return err
+		}
+
+		result.ToAccount, err = q.AddAccountBalance(ctx, AddAccountBalanceParams{
+			ID:     arg.ToAccountID,
+			Amount: arg.Amount,
+		})
 		if err != nil {
 			return err
 		}
